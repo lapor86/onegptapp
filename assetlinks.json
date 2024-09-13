@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.onechatgpt",
+      "sha256_cert_fingerprints": [
+        "2A:7D:29:20:EE:5E:46:9A:75:59:BD:F8:C5:16:AF:E9:7A:95:E4:97:3C:E7:F3:5F:58:49:3A:64:36:6E:67:E1"
+      ]
+    }
+  }
+]
