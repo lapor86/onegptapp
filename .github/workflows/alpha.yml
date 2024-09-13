@@ -1,0 +1,85 @@
+name: Build and Alpha APK
+
+on:
+  push:
+    branches:
+      - alpha
+  pull_request:
+    branches:
+      - alpha
+    types: [closed]
+
+jobs:
+  build-and-release:
+    name: Build and Release APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.x"
+
+      - name: Decode keystore
+        run: |
+          echo ${{ secrets.KEYSTORE }} | base64 --decode > ${{ github.workspace }}/android/app/keystore.jks
+
+      - name: Extract version
+        run: |
+          echo "VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //')" >> $GITHUB_ENV
+
+      - name: Build APKs
+        run: |
+          flutter pub get
+          flutter build apk --release
+          flutter build apk --release --split-per-abi
+        env:
+          KEYALIAS: ${{ secrets.KEYALIAS }}
+          KEYPASSWORD: ${{ secrets.KEYPASSWORD }}
+          STOREPASSWORD: ${{ secrets.STOREPASSWORD }}
+
+      - name: Rename and Prepare APKs for Upload
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/OneChatGPT-${{ env.VERSION }}-fat.apk
+          for apk in build/app/outputs/flutter-apk/*-release.apk; do
+            abi=$(echo "$apk" | sed -n 's/.*app-\(.*\)-release.apk/\1/p')
+            newname="OneChatGPT-${{ env.VERSION }}-${abi}.apk"
+            mv "$apk" "build/app/outputs/flutter-apk/$newname"
+          done
+
+      - name: Upload APKs to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: APKs
+          path: build/app/outputs/flutter-apk/*.apk
+
+      - name: Get current time
+        run: echo "CURRENT_TIME=$(TZ=Asia/Jakarta date '+%Y年%m月%d日 %H时%M分%S秒')" >> $GITHUB_ENV
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          removeArtifacts: true
+          artifacts: "build/app/outputs/flutter-apk/*.apk"
+          tag: Alpha
+          name: OneChatGPT Alpha
+          body: |
+            ## 选择合适的版本下载
+
+            ### 通用 APK
+            - 如果您不确定您的设备类型，请下载：OneChatGPT-***-fat.apk（这是一个包含所有目标 ABI 的通用包）
+
+            ### 针对特定架构的 APKs
+            - 对于 ARM 64位设备：OneChatGPT-***-arm64-v8a.apk
+            - 对于 ARM 32位设备：OneChatGPT-***-armeabi-v7a.apk
+            - 对于 x86_64 设备：OneChatGPT-***-x86_64.apk
+
+            更新时间：${{ env.CURRENT_TIME }}
+          draft: false
+          prerelease: true
+          token: ${{ secrets.GH_TOKEN }}
